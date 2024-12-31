@@ -173,6 +173,7 @@ const App: Component = () => {
             {(weatherItems, month) => (
               <StackV name={month} spacing={0}>
                 <For each={weatherItems}>
+                  {/* TODO: need a color space here probably... */}
                   {(weather) => <Box w={16} h={weather.numDays * 10} fill={colors[weather.weatherType]} />}
                 </For>
               </StackV>
@@ -190,7 +191,9 @@ const App: Component = () => {
       </Bluefish>
       <br />
       <Bluefish>
-        {/* operators also seem capable of gluing togethers spaces somehow... */}
+        {/* operators also seem capable of gluing togethers spaces somehow...
+            could I use that to lift a Space context to the top level? like allow people to specify it there? */}
+        {/* TODO: how should spaces interact with operators? should they propagate downwards or just treat stuff as an impenetrable element? */}
         <StackH alignment="bottom" spacing={16}>
           <GroupBy each={seattleWeather} by={(w) => w.month}>
             {(weatherItems, month) => (
