@@ -2,6 +2,13 @@ import { Rect, withBluefish } from "../src";
 import { createEffect, JSX, splitProps } from "solid-js";
 import { createLinSysBBox, DIMS } from "./util/bbox";
 
+// type Dimension = "x" | "y";
+// type Suffix = "start" | "center" | "end" | "range";
+// export type Dimensions = `${Dimension}-${Suffix}` | `${Dimension}-range/${Dimension}-range`;
+// // "x-start"
+// // "x-range/y-range"
+// // "y-end"
+
 export type BoxProps = Omit<JSX.RectSVGAttributes<SVGRectElement>, "x" | "y" | "width" | "height"> & {
   x?: number;
   cx?: number;
