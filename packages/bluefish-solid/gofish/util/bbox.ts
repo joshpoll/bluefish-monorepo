@@ -12,6 +12,8 @@ export type Dim = (typeof DIMS)[number];
 
 export type Axis = "vertical" | "horizontal";
 
+export type AxisSystem = { [key in Dim]?: [readonly [number, number], number] };
+
 export const axisMap: { [key in Dim]: Axis } = {
   x: "horizontal",
   cx: "horizontal",
@@ -115,6 +117,22 @@ export const checkLinearEq = (
 export const computeLinearExpr = (eq: readonly [number, number], vec: readonly [number, number]) =>
   eq[0] * vec[0] + eq[1] * vec[1];
 
+// Solve a linear system of equations for some axis assuming it's isolated from the other axis
+const solveAxisSystem = (equations: AxisSystem) => {
+  const eqs = Object.values(equations);
+  if (eqs.length < 2) return undefined;
+
+  const [center, size] = solveSystem(eqs[0], eqs[1]);
+
+  // Check additional equations
+  for (const eq of eqs.slice(2)) {
+    if (!checkLinearEq(eq, [center, size])) {
+      throw new Error(`System is not solvable. Equations: ${JSON.stringify(eqs)}`);
+    }
+  }
+  return [center, size] as [number, number];
+};
+
 /* 
 Creates a linear system of equations representing the bounding box dimensions.
 
@@ -131,198 +149,46 @@ behaviors depending on the number of equations specified:
 */
 export const createLinSysBBox = (): BBox => {
   const [equations, setEquations] = createStore<{
-    [key in Axis]: { [key in Dim]?: [readonly [number, number], number] };
+    [key in Axis]: AxisSystem;
   }>({
     horizontal: {},
     vertical: {},
   });
 
-  const centerXAndWidth = createMemo(() => {
-    const xEqs = Object.values(equations.horizontal);
-    if (xEqs.length < 2) return undefined;
-    else {
-      const [centerX, width] = solveSystem(xEqs[0], xEqs[1]);
-      if (xEqs.length > 2) {
-        // check the other equations
-        for (const eq of xEqs.slice(2)) {
-          if (!checkLinearEq(eq, [centerX, width])) {
-            throw new Error(`System is not solvable. Equations: ${JSON.stringify(xEqs)}`);
-          }
-        }
-      }
-      return [centerX, width] satisfies [number, number];
-    }
-  });
+  const centerXAndWidth = createMemo(() => solveAxisSystem(equations.horizontal));
+  const centerYAndHeight = createMemo(() => solveAxisSystem(equations.vertical));
 
-  const centerYAndHeight = createMemo(() => {
-    const yEqs = Object.values(equations.vertical);
-    if (yEqs.length < 2) return undefined;
-    else {
-      const [centerY, height] = solveSystem(yEqs[0], yEqs[1]);
-      if (yEqs.length > 2) {
-        // check the other equations
-        for (const eq of yEqs.slice(2)) {
-          if (!checkLinearEq(eq, [centerY, height])) {
-            throw new Error(`System is not solvable. Equations: ${JSON.stringify(yEqs)}`);
-          }
-        }
-      }
-      return [centerY, height] satisfies [number, number];
-    }
-  });
+  const bbox = {};
 
-  return {
-    get x() {
-      if ("x" in equations.horizontal) {
-        return equations.horizontal.x![1];
-      }
-      const cw = centerXAndWidth();
-      return cw ? computeLinearExpr(cw, dimVecs.horizontal.x) : undefined;
-    },
-    set x(x: number | undefined) {
-      if (x === undefined) {
-        setEquations(
-          "horizontal",
-          produce((dims) => {
-            delete dims.x;
-          })
-        );
-      } else {
-        setEquations("horizontal", "x", [dimVecs.horizontal.x, x]);
-      }
-    },
-    get cx() {
-      if ("cx" in equations.horizontal) {
-        return equations.horizontal.cx![1];
-      }
-      const cw = centerXAndWidth();
-      return cw ? computeLinearExpr(cw, dimVecs.horizontal.cx) : undefined;
-    },
-    set cx(cx: number | undefined) {
-      if (cx === undefined) {
-        setEquations(
-          "horizontal",
-          produce((dims) => {
-            delete dims.cx;
-          })
-        );
-      } else {
-        setEquations("horizontal", "cx", [dimVecs.horizontal.cx, cx]);
-      }
-    },
-    get x2() {
-      if ("x2" in equations.horizontal) {
-        return equations.horizontal.x2![1];
-      }
-      const cw = centerXAndWidth();
-      return cw ? computeLinearExpr(cw, dimVecs.horizontal.x2) : undefined;
-    },
-    set x2(x2: number | undefined) {
-      if (x2 === undefined) {
-        setEquations(
-          "horizontal",
-          produce((dims) => {
-            delete dims.x2;
-          })
-        );
-      } else {
-        setEquations("horizontal", "x2", [dimVecs.horizontal.x2, x2]);
-      }
-    },
-    get w() {
-      if ("w" in equations.horizontal) {
-        return equations.horizontal.w![1];
-      }
-      const cw = centerXAndWidth();
-      return cw ? computeLinearExpr(cw, dimVecs.horizontal.w) : undefined;
-    },
-    set w(w: number | undefined) {
-      if (w === undefined) {
-        setEquations(
-          "horizontal",
-          produce((dims) => {
-            delete dims.w;
-          })
-        );
-      } else {
-        setEquations("horizontal", "w", [dimVecs.horizontal.w, w]);
-      }
-    },
-    get y() {
-      if ("y" in equations.vertical) {
-        return equations.vertical.y![1];
-      }
-      const ch = centerYAndHeight();
-      return ch ? computeLinearExpr(ch, dimVecs.vertical.y) : undefined;
-    },
-    set y(y: number | undefined) {
-      if (y === undefined) {
-        setEquations(
-          "vertical",
-          produce((dims) => {
-            delete dims.y;
-          })
-        );
-      } else {
-        setEquations("vertical", "y", [dimVecs.vertical.y, y]);
-      }
-    },
-    get cy() {
-      if ("cy" in equations.vertical) {
-        return equations.vertical.cy![1];
-      }
-      const ch = centerYAndHeight();
-      return ch ? computeLinearExpr(ch, dimVecs.vertical.cy) : undefined;
-    },
-    set cy(cy: number | undefined) {
-      if (cy === undefined) {
-        setEquations(
-          "vertical",
-          produce((dims) => {
-            delete dims.cy;
-          })
-        );
-      } else {
-        setEquations("vertical", "cy", [dimVecs.vertical.cy, cy]);
-      }
-    },
-    get y2() {
-      if ("y2" in equations.vertical) {
-        return equations.vertical.y2![1];
-      }
-      const ch = centerYAndHeight();
-      return ch ? computeLinearExpr(ch, dimVecs.vertical.y2) : undefined;
-    },
-    set y2(y2: number | undefined) {
-      if (y2 === undefined) {
-        setEquations(
-          "vertical",
-          produce((dims) => {
-            delete dims.y2;
-          })
-        );
-      } else {
-        setEquations("vertical", "y2", [dimVecs.vertical.y2, y2]);
-      }
-    },
-    get h() {
-      if ("h" in equations.vertical) {
-        return equations.vertical.h![1];
-      }
-      const ch = centerYAndHeight();
-      return ch ? computeLinearExpr(ch, dimVecs.vertical.h) : undefined;
-    },
-    set h(h: number | undefined) {
-      if (h === undefined) {
-        setEquations(
-          "vertical",
-          produce((dims) => {
-            delete dims.h;
-          })
-        );
-      } else {
-        setEquations("vertical", "h", [dimVecs.vertical.h, h]);
-      }
-    },
-  };
+  for (const dim of DIMS) {
+    const axis = axisMap[dim];
+    const centerAndSize = axis === "horizontal" ? () => centerXAndWidth() : () => centerYAndHeight();
+
+    Object.defineProperty(bbox, dim, {
+      get: function () {
+        if (dim in equations[axis]) {
+          return equations[axis][dim]![1];
+        }
+        // @ts-expect-error dimVecs type needs refinement
+        return centerAndSize() ? computeLinearExpr(centerAndSize(), dimVecs[axis][dim]) : undefined;
+      },
+      set: function (value: number | undefined) {
+        if (value === undefined) {
+          setEquations(
+            axis,
+            produce((dims) => {
+              delete dims[dim];
+            })
+          );
+        } else {
+          // @ts-expect-error dimVecs type needs refinement
+          setEquations(axis, dim, [dimVecs[axis][dim], value]);
+        }
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  }
+
+  return bbox;
 };
