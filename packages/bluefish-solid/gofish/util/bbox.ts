@@ -102,20 +102,18 @@ export const solveSystem = (
   return [center, size];
 };
 
+// If eq = [a, b] and vec = [x, y], then this function computes: a * x + b * y
+export const dot = (eq: readonly [number, number], vec: readonly [number, number]) => eq[0] * vec[0] + eq[1] * vec[1];
+
 // If eq = [[a, b], c] and vec = [x, y], then this function checks: a * x + b * y = c
 export const checkLinearEq = (
   eq: [readonly [number, number], number],
   vec: readonly [number, number],
   tolerance = 1e-6
 ): boolean => {
-  const [a, b] = eq[0];
   const c = eq[1];
-  return Math.abs(a * vec[0] + b * vec[1] - c) < tolerance;
+  return Math.abs(dot(eq[0], vec) - c) < tolerance;
 };
-
-// If eq = [a, b] and vec = [x, y], then this function computes: a * x + b * y
-export const computeLinearExpr = (eq: readonly [number, number], vec: readonly [number, number]) =>
-  eq[0] * vec[0] + eq[1] * vec[1];
 
 // Solve a linear system of equations for some axis assuming it's isolated from the other axis
 const solveAxisSystem = (equations: AxisSystem) => {
@@ -170,7 +168,7 @@ export const createLinSysBBox = (): BBox => {
           return equations[axis][dim]![1];
         }
         // @ts-expect-error dimVecs type needs refinement
-        return centerAndSize() ? computeLinearExpr(centerAndSize(), dimVecs[axis][dim]) : undefined;
+        return centerAndSize() ? dot(centerAndSize(), dimVecs[axis][dim]) : undefined;
       },
       set: function (value: number | undefined) {
         if (value === undefined) {
