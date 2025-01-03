@@ -1,4 +1,4 @@
-import { createMemo, untrack } from "solid-js";
+import { createEffect, createMemo, untrack } from "solid-js";
 import { maybeAdd, maybeDiv, maybeMax, maybeMin, maybeSub } from "./maybe";
 import { createStore, produce } from "solid-js/store";
 
@@ -25,7 +25,9 @@ export const axisMap: { [key in Dim]: Axis } = {
   h: "vertical",
 };
 
-export type BBox<T = number> = { [key in Dim]?: T };
+// TODO: add aspectRatio field to the right places...
+// TODO: solve the aspectRatio constraint when it appears using another createEffect for that case...
+export type BBox<T = number> = { [key in Dim]?: T } & { aspectRatio?: T };
 
 export const from = (bboxes: BBox[]): BBox => {
   if (bboxes.length === 0)
@@ -79,7 +81,7 @@ export const dimVecs = {
 } as const satisfies { [key in Axis]: { [key in Dim]?: [number, number] } };
 
 // solve 2x2 system given two equations e1 and e2
-export const solveSystem = (
+export const solve2x2System = (
   e1: [readonly [number, number], number],
   e2: [readonly [number, number], number]
 ): [number, number] => {
@@ -120,7 +122,7 @@ const solveAxisSystem = (equations: AxisSystem) => {
   const eqs = Object.values(equations);
   if (eqs.length < 2) return undefined;
 
-  const [center, size] = solveSystem(eqs[0], eqs[1]);
+  const [center, size] = solve2x2System(eqs[0], eqs[1]);
 
   // Check additional equations
   for (const eq of eqs.slice(2)) {
@@ -153,22 +155,51 @@ export const createLinSysBBox = (): BBox => {
     vertical: {},
   });
 
-  const centerXAndWidth = createMemo(() => solveAxisSystem(equations.horizontal));
-  const centerYAndHeight = createMemo(() => solveAxisSystem(equations.vertical));
+  const [solution, setSolution] = createStore<{
+    horizontal: [number | undefined, number | undefined];
+    vertical: [number | undefined, number | undefined];
+  }>({
+    horizontal: [undefined, undefined],
+    vertical: [undefined, undefined],
+  });
+
+  createEffect(() => {
+    const solution = solveAxisSystem(equations.horizontal);
+    if (solution !== undefined) {
+      setSolution("horizontal", solution);
+    }
+  });
+
+  createEffect(() => {
+    const solution = solveAxisSystem(equations.vertical);
+    if (solution !== undefined) {
+      setSolution("vertical", solution);
+    }
+  });
+
+  // const centerXAndWidth = createMemo(() => solveAxisSystem(equations.horizontal));
+  // const centerYAndHeight = createMemo(() => solveAxisSystem(equations.vertical));
 
   const bbox = {};
 
   for (const dim of DIMS) {
     const axis = axisMap[dim];
-    const centerAndSize = axis === "horizontal" ? () => centerXAndWidth() : () => centerYAndHeight();
 
     Object.defineProperty(bbox, dim, {
       get: function () {
         if (dim in equations[axis]) {
           return equations[axis][dim]![1];
         }
-        // @ts-expect-error dimVecs type needs refinement
-        return centerAndSize() ? dot(centerAndSize(), dimVecs[axis][dim]) : undefined;
+
+        // if the dim is the width or height, it could be set b/c of the aspect ratio constraint
+        if (dim === "w" || dim === "h") {
+          return solution[axis][1];
+        }
+
+        return solution[axis][0] !== undefined && solution[axis][1] !== undefined
+          ? // @ts-expect-error dimVecs type needs refinement
+            dot(solution[axis] as [number, number], dimVecs[axis][dim])
+          : undefined;
       },
       set: function (value: number | undefined) {
         if (value === undefined) {
