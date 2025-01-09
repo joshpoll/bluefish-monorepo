@@ -26,7 +26,9 @@ export const axisMap: { [key in Dim]: Axis } = {
 };
 
 // TODO: add aspectRatio field to the right places...
-// TODO: solve the aspectRatio constraint when it appears using another createEffect for that case...
+// TODO: solve the aspectRatio constraint when it appears using another createEffect for that
+// case...
+// aspectRatio is width / height
 export type BBox<T = number> = { [key in Dim]?: T } & { aspectRatio?: T };
 
 export const from = (bboxes: BBox[]): BBox => {
@@ -118,7 +120,7 @@ export const checkLinearEq = (
 };
 
 // Solve a linear system of equations for some axis assuming it's isolated from the other axis
-const solveAxisSystem = (equations: AxisSystem) => {
+const solveAxis2x2System = (equations: AxisSystem) => {
   const eqs = Object.values(equations);
   if (eqs.length < 2) return undefined;
 
@@ -148,11 +150,18 @@ behaviors depending on the number of equations specified:
         existing ones.
 */
 export const createLinSysBBox = (): BBox => {
-  const [equations, setEquations] = createStore<{
-    [key in Axis]: AxisSystem;
-  }>({
+  const [equations, setEquations] = createStore<
+    {
+      [key in Axis]: AxisSystem;
+    } & { aspectRatio?: number }
+  >({
     horizontal: {},
     vertical: {},
+    aspectRatio: undefined,
+  });
+
+  createEffect(() => {
+    console.log("equations", JSON.parse(JSON.stringify(equations)));
   });
 
   const [solution, setSolution] = createStore<{
@@ -163,17 +172,60 @@ export const createLinSysBBox = (): BBox => {
     vertical: [undefined, undefined],
   });
 
+  // horizontal 2x2 system
   createEffect(() => {
-    const solution = solveAxisSystem(equations.horizontal);
+    const solution = solveAxis2x2System(equations.horizontal);
     if (solution !== undefined) {
       setSolution("horizontal", solution);
     }
   });
 
+  // vertical 2x2 system
   createEffect(() => {
-    const solution = solveAxisSystem(equations.vertical);
+    const solution = solveAxis2x2System(equations.vertical);
     if (solution !== undefined) {
       setSolution("vertical", solution);
+    }
+  });
+
+  // aspectRatio system
+  createEffect(() => {
+    if (equations.aspectRatio === undefined) return;
+
+    // Check for width and height in solutions and then equations
+    // If there is a 2x2 axis system, the solution will have width or height
+    // If the user has set width or height directly, it will be in the equations
+    const width = solution.horizontal[1] ?? equations.horizontal.w?.[1];
+    const height = solution.vertical[1] ?? equations.vertical.h?.[1];
+
+    // If both of these are defined, we just need to check that the aspect ratio is consistent
+    if (width !== undefined && height !== undefined) {
+      if (Math.abs(width / height - equations.aspectRatio) > 1e-6) {
+        throw new Error(
+          `Aspect ratio is not consistent: expected ${equations.aspectRatio} but got ${width / height} (width=${width}, height=${height})`
+        );
+      }
+      return;
+    }
+
+    // If both of these are undefined, we can't do anything for now...
+    if (width === undefined && height === undefined) return;
+
+    /* TODO: this will *almost* work except that the new equation won't get properly deleted when
+    anything else updates... I think I need to an aspectRatio field to each axis equations object
+    and write this equation there instead. then delete that in addition to the aspectRatio field
+    whenever the aspectRatio is updated.
+    
+    there's another problem, which is that width and height rely on solutions that could be stale. I
+    think we also need to clear the corresponding solution field (based on which axis aspectRatio
+    equation is set) when the aspectRatio is updated, too
+    */
+    if (width === undefined) {
+      // we can now add a width equation
+      setEquations("horizontal", "w", [[0, 1], equations.aspectRatio * height!]);
+    } else {
+      // we can now add a height equation
+      setEquations("vertical", "h", [[0, 1], width / equations.aspectRatio]);
     }
   });
 
@@ -202,6 +254,7 @@ export const createLinSysBBox = (): BBox => {
           : undefined;
       },
       set: function (value: number | undefined) {
+        console.log("setting", dim, value);
         if (value === undefined) {
           setEquations(
             axis,

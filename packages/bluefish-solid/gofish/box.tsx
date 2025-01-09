@@ -1,6 +1,7 @@
 import { Rect, withBluefish } from "../src";
 import { createEffect, JSX, splitProps } from "solid-js";
 import { createLinSysBBox, DIMS } from "./util/bbox";
+import { useSpace } from "./space";
 
 // type Dimension = "x" | "y";
 // type Suffix = "start" | "center" | "end" | "range";
@@ -34,5 +35,19 @@ export const Box = withBluefish((props: BoxProps) => {
     }
   });
 
-  return <Rect {...rest} x={bbox.x} y={bbox.y} width={bbox.w} height={bbox.h} />;
+  const space = useSpace();
+
+  const center = () =>
+    bbox.cx !== undefined && bbox.cy !== undefined ? space.transform([bbox.cx!, bbox.cy!]) : [undefined, undefined];
+
+  return (
+    <Rect
+      {...rest}
+      /* x={bbox.x}
+      y={bbox.y} */ x={center()[0] !== undefined ? center()[0]! - bbox.w! / 2 : undefined}
+      y={center()[1] !== undefined ? center()[1]! - bbox.h! / 2 : undefined}
+      width={bbox.w}
+      height={bbox.h}
+    />
+  );
 });
